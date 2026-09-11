@@ -1,0 +1,113 @@
+// The Learning Flame — JAMB Standard Quiz
+// Prisma schema (PostgreSQL — Vercel Postgres / Supabase compatible)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Stream {
+  SCIENCE
+  ARTS
+  COMMERCIAL
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_SUBMITTED // time ran out / exam window closed
+  ABANDONED      // never finished, both attempts used
+}
+
+model Student {
+  id            String    @id @default(cuid())
+  examNumber    String    @unique // e.g. LF-2026-00482
+  fullName      String
+  stateOfOrigin String
+  age           Int
+  currentClass  String
+  stream        Stream
+  subjectOne    String // one of the 5 stream subjects (English is implicit/compulsory)
+  subjectTwo    String
+  subjectThree  String
+  pin           String   // 4-6 digit PIN set at registration, used with examNumber to resume
+  createdAt     DateTime @default(now())
+
+  attempts Attempt[]
+
+  @@index([stream])
+}
+
+model Subject {
+  id     String @id @default(cuid())
+  name   String @unique // "English Language", "Mathematics", ...
+  field  Stream? // null for English (shared/compulsory), else the stream it belongs to
+
+  questions Question[]
+}
+
+model Question {
+  id            String   @id @default(cuid())
+  subjectId     String
+  subject       Subject  @relation(fields: [subjectId], references: [id])
+  text          String
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctOption String   // "A" | "B" | "C" | "D"
+  explanation   String?  // shown during post-6:10pm review
+  difficulty    String   @default("medium") // easy | medium | hard
+  createdAt     DateTime @default(now())
+
+  answers Answer[]
+
+  @@index([subjectId])
+}
+
+model Attempt {
+  id           String        @id @default(cuid())
+  studentId    String
+  student      Student       @relation(fields: [studentId], references: [id])
+  attemptNo    Int           // 1 or 2
+  status       AttemptStatus @default(IN_PROGRESS)
+  startedAt    DateTime      @default(now())
+  deadlineAt   DateTime      // startedAt + 2h, server-computed, clamped so review still makes sense
+  submittedAt  DateTime?
+  score        Int?          // out of 400, set on submit
+  englishScore Int?
+  subjectOneScore   Int?
+  subjectTwoScore   Int?
+  subjectThreeScore Int?
+
+  answers Answer[]
+
+  @@unique([studentId, attemptNo])
+  @@index([studentId])
+}
+
+model Answer {
+  id          String   @id @default(cuid())
+  attemptId   String
+  attempt     Attempt  @relation(fields: [attemptId], references: [id])
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id])
+  chosen      String?  // "A" | "B" | "C" | "D" | null if unanswered
+  answeredAt  DateTime @updatedAt
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
