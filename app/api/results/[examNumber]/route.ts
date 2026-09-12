@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resultsAndReviewOpen } from "@/lib/examWindow";
 
-export async function GET(req: NextRequest, { params }: { params: { examNumber: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ examNumber: string }> }) {
   try {
+    const { examNumber } = await params;
     const pin = req.nextUrl.searchParams.get("pin");
     if (!pin) return NextResponse.json({ error: "PIN is required." }, { status: 400 });
 
     const student = await prisma.student.findUnique({
-      where: { examNumber: params.examNumber },
+      where: { examNumber },
       include: {
         attempts: {
           include: { answers: { include: { question: true } } },
